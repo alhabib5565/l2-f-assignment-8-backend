@@ -1,7 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
+const bcrypt = require("bcrypt");
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -25,7 +27,99 @@ async function run() {
 
     const db = client.db("cleaning-supplies");
     const productsCollection = db.collection("products");
+    const collection = db.collection("users");
 
+    // User Registration
+    app.post("/api/v1/register", async (req, res) => {
+      const { name, email, password } = req.body;
+
+      // Check if email already exists
+      const existingUser = await collection.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: "User already exists",
+        });
+      }
+
+      // Hash the password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Insert user into the database
+      await collection.insertOne({ name, email, password: hashedPassword });
+
+      res.status(201).json({
+        success: true,
+        message: "User registered successfully",
+      });
+    });
+    // User Login
+    app.post("/api/v1/login", async (req, res) => {
+      const { email, password } = req.body;
+
+      // Find user by email
+      const user = await collection.findOne({ email });
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Compare hashed password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, {
+        expiresIn: process.env.EXPIRES_IN,
+      });
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        token,
+      });
+    });
+
+    //=================my code=====================
+    app.post("/api/v1/product/add-product", async (req, res) => {
+      try {
+        const poroductData = req.body;
+        const result = await productsCollection.insertOne(poroductData);
+        res.status(200).json({
+          success: true,
+          message: "Product has been created",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "product create failed",
+        });
+      }
+    });
+    app.patch("/api/v1/product/:id", async (req, res) => {
+      try {
+        const updatedData = req.body;
+        const id = req.params;
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: updatedData,
+          }
+        );
+        res.status(200).json({
+          success: true,
+          message: "Product has been updated",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "product update failed",
+        });
+      }
+    });
     app.get("/api/v1/products", async (req, res) => {
       const query = req.query;
       const modifyedQuery = {};
@@ -86,6 +180,33 @@ async function run() {
         res.status(400).json({
           success: false,
           message: error.message || "supply product failed",
+        });
+      }
+    });
+    app.get("/api/v1/brands", async (req, res) => {
+      try {
+        const result = await productsCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$brand",
+                avgRating: { $avg: "$rating" },
+              },
+            },
+            {
+              $sort: { avgRating: -1 },
+            },
+          ])
+          .toArray();
+        res.status(200).json({
+          success: true,
+          message: "successfully retrieved brands data",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "brands data retrieved failed",
         });
       }
     });
