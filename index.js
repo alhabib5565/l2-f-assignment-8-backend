@@ -27,6 +27,8 @@ async function run() {
 
     const db = client.db("cleaning-supplies");
     const productsCollection = db.collection("products");
+    const ordersCollection = db.collection("orders");
+    const reviewsCollection = db.collection("reviews");
     const collection = db.collection("users");
 
     // User Registration
@@ -70,9 +72,13 @@ async function run() {
       }
 
       // Generate JWT token
-      const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, {
-        expiresIn: process.env.EXPIRES_IN,
-      });
+      const token = jwt.sign(
+        { email: user.email, name: user.name },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: process.env.EXPIRES_IN,
+        }
+      );
 
       res.json({
         success: true,
@@ -98,6 +104,7 @@ async function run() {
         });
       }
     });
+
     app.patch("/api/v1/product/:id", async (req, res) => {
       try {
         const updatedData = req.body;
@@ -207,6 +214,97 @@ async function run() {
         res.status(400).json({
           success: false,
           message: error.message || "brands data retrieved failed",
+        });
+      }
+    });
+
+    //=======================order related==================
+    app.post("/api/v1/order/proceed", async (req, res) => {
+      try {
+        const reviewInfo = req.body;
+        const result = await reviewsCollection.insertOne(reviewInfo);
+        res.status(200).json({
+          success: true,
+          message: "Order proceed succesfully",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "Order proceed failed",
+        });
+      }
+    });
+
+    app.get("/api/v1/orders", async (req, res) => {
+      try {
+        const result = await ordersCollection.find().toArray();
+        res.status(200).json({
+          success: true,
+          message: "successfully retrieved orders data",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "product retrieved failed",
+        });
+      }
+    });
+
+    //=======================review related==================
+    app.post("/api/v1/review/add-review", async (req, res) => {
+      try {
+        const reviewInfo = req.body;
+        const result = await reviewsCollection.insertOne(reviewInfo);
+        res.status(200).json({
+          success: true,
+          message: "review add succesfully",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "review add failed",
+        });
+      }
+    });
+
+    app.get("/api/v1/review/:productId", async (req, res) => {
+      try {
+        const productId = req.params.productId;
+        console.log(productId);
+        const result = await reviewsCollection
+          .aggregate([
+            {
+              $match: { productId: productId },
+            },
+          ])
+          .toArray();
+        res.status(200).json({
+          success: true,
+          message: "successfully retrieved product reviews",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "product reviews retrieved failed",
+        });
+      }
+    });
+    app.get("/api/v1/review", async (req, res) => {
+      try {
+        const result = await reviewsCollection.find().toArray();
+        res.status(200).json({
+          success: true,
+          message: "successfully retrieved product reviews",
+          data: result,
+        });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error.message || "product reviews retrieved failed",
         });
       }
     });
